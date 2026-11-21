@@ -1,0 +1,52 @@
+pipeline {
+    agent any
+
+    environment {
+        PATH = "/home/userland/.yarn/bin:/home/userland/.config/yarn/global/node_modules/.bin:${env.PATH}"
+        JENKINS_NODE_COOKIE = 'dontKillMe'
+        PORT = '3000'
+        APP_NAME = 'devops-live-dashboard'
+    }
+
+    options {
+        buildDiscarder(logRotator(numToKeepStr: '5'))
+        timeout(time: 15, unit: 'MINUTES')
+    }
+
+    stages {
+        stage('Build & Deploy') {
+            steps {
+                sh '''
+                    if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
+                        echo "Docker daemon detected — building and running container..."
+                        docker build -t ${APP_NAME}:latest .
+                        docker rm -f ${APP_NAME} || true
+                        docker run -d --name ${APP_NAME} -p ${PORT}:3000 --restart unless-stopped ${APP_NAME}:latest
+                    else
+                        echo "Running in UserLAnd (no Docker daemon) — deploying with Yarn + Node..."
+                        yarn install --network-concurrency 1 --non-interactive
+                        pkill -f "node server.js" || true
+                        sleep 1
+                        DEPLOY_ENV="UserLAnd Mobile Server" nohup yarn start > app.log 2>&1 < /dev/null &
+                    fi
+                '''
+            }
+        }
+
+        stage('Health Check') {
+            steps {
+                sh '''
+                    sleep 3
+                    curl -fsS http://127.0.0.1:${PORT}/api/status || { echo "Health check failed:"; cat app.log || true; exit 1; }
+                '''
+            }
+        }
+    }
+
+    post {
+        success {
+            echo "Website is live on port ${PORT}!"
+        }
+    }
+}
+

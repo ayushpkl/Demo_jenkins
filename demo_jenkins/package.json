@@ -1,0 +1,13 @@
+{
+	  "name": "devops-live-dashboard",
+	    "version": "1.0.0",
+	      "description": "Mobile-deployed Node.js DevOps Dashboard via Jenkins & Docker",
+	        "main": "server.js",
+		  "scripts": {
+			      "start": "node server.js"
+			        },
+				  "dependencies": {
+					      "express": "^4.21.1"
+					        }
+}
+
