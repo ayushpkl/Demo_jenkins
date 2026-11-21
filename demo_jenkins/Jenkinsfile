@@ -6,6 +6,7 @@ pipeline {
         JENKINS_NODE_COOKIE = 'dontKillMe'
         PORT = '3000'
         APP_NAME = 'devops-live-dashboard'
+        APP_DIR = 'demo_jenkins'
     }
 
     options {
@@ -17,17 +18,19 @@ pipeline {
         stage('Build & Deploy') {
             steps {
                 sh '''
+                    set -e
                     if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
                         echo "Docker daemon detected — building and running container..."
-                        docker build -t ${APP_NAME}:latest .
+                        docker build -t ${APP_NAME}:latest ${APP_DIR}
                         docker rm -f ${APP_NAME} || true
                         docker run -d --name ${APP_NAME} -p ${PORT}:3000 --restart unless-stopped ${APP_NAME}:latest
                     else
                         echo "Running in UserLAnd (no Docker daemon) — deploying with Yarn + Node..."
+                        cd "${WORKSPACE}/${APP_DIR}"
                         yarn install --network-concurrency 1 --non-interactive
                         pkill -f "node server.js" || true
                         sleep 1
-                        DEPLOY_ENV="UserLAnd Mobile Server" nohup yarn start > app.log 2>&1 < /dev/null &
+                        DEPLOY_ENV="UserLAnd Mobile Server" PORT="${PORT}" nohup yarn start > app.log 2>&1 < /dev/null &
                     fi
                 '''
             }
@@ -37,7 +40,11 @@ pipeline {
             steps {
                 sh '''
                     sleep 3
-                    curl -fsS http://127.0.0.1:${PORT}/api/status || { echo "Health check failed:"; cat app.log || true; exit 1; }
+                    curl -fsS http://127.0.0.1:${PORT}/api/status || {
+                        echo "Health check failed:"
+                        cat "${WORKSPACE}/${APP_DIR}/app.log" 2>/dev/null || true
+                        exit 1
+                    }
                 '''
             }
         }
@@ -49,4 +56,3 @@ pipeline {
         }
     }
 }
-
